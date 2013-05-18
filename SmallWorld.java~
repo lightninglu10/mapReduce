@@ -1,0 +1,337 @@
+/*
+ *
+ * CS61C Spring 2013 Project 2: Small World
+ *
+ * Partner 1 Name: Ronald Kwan
+ * Partner 1 Login: cs61c-ju
+ *
+ * Partner 2 Name: Patrick Lu
+ * Partner 2 Login: cs61c-pi
+ *
+ * REMINDERS: 
+ *
+ * 1) YOU MUST COMPLETE THIS PROJECT WITH A PARTNER.
+ * 
+ * 2) DO NOT SHARE CODE WITH ANYONE EXCEPT YOUR PARTNER.
+ * EVEN FOR DEBUGGING. THIS MEANS YOU.
+ *
+ */
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+import java.lang.Math;
+import java.util.*;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
+import org.apache.hadoop.util.GenericOptionsParser;
+
+
+public class SmallWorld {
+    // Maximum depth for any breadth-first search
+    public static final int MAX_ITERATIONS = 20;
+
+    // Example writable type
+    public static class Node implements Writable {
+
+        public int id;
+        public boolean start = false;
+        public int totaldist;
+        public ArrayList<Node> neighbors;
+        public HashMap<Long, Long> distances;
+        public boolean visited = false;
+        public int when;
+        public Node parent;
+
+
+        public Node() {
+            id = -1;
+            neighbors = new ArrayList<Node>();
+            totaldist = 0;
+        }
+
+        public Node(int id, ArrayList<Node> neighbors, int accumulateddist) {
+            this.id = id;
+            this.neighbors = neighbors;
+            accumulateddist = totaldist;
+        }
+
+        public void setID(long id) {
+            this.id = id;
+        }
+
+        public void setParent(Node paren) {
+            parent = paren;
+        }
+
+        public void setWhen(long time) {
+            when = time;
+        }
+
+        public void setVisited() {
+            visted = true;
+        }
+
+        public void setStart() {
+            start = true;
+        }
+
+        public void getStart() {
+            return start;
+        }
+
+        public void getVisited() {
+            return visited;
+        }
+
+        public void setDistance() {
+            totaldist += 1;
+        }
+
+        public long getDistance() {
+            return totaldist;
+        }
+
+        public long getID() {
+            return id;
+        }
+
+        public void addNeighbor(long neighbor) {
+            neighbors.add(neighbor);
+        }
+
+        public ArrayList<Node> getNeighbors() {
+            return neighbors;
+        }
+
+        // Serializes object - needed for Writable
+        public void write(DataOutput out) throws IOException {
+            out.writeInt(id);
+
+            // Example of serializing an array:
+            
+            // It's a good idea to store the length explicitly
+            int length = 0;
+
+            if (neighbors != null){
+                length = neighbors.size();
+            }
+
+            // always write the length, since we need to know
+            // even when it's zero
+            out.writeInt(length);
+
+            // now write each long in the array
+            for (int i = 0; i < length; i++){
+                out.writeLong(neighbors.get(i).getID());
+            }
+        }
+
+        // Deserializes object - needed for Writable
+        public void readFields(DataInput in) throws IOException {
+            // example reading an int from the serialized object
+            id = in.readInt();
+
+            // example reading length from the serialized object
+            int length = in.readInt();
+
+            // Example of rebuilding the array from the serialized object
+            neighbors = new ArrayList<Node>();
+            
+            for(int i = 0; i < length; i++){
+                neighbors.add(in.readLong());
+            }
+
+        }
+
+        public String toString() {
+            return neighbors.toString();
+        }
+
+    }
+
+    /* The first mapper. Part of the graph loading process. */
+    public static class LoaderMap extends Mapper<LongWritable, LongWritable, 
+        LongWritable, Node> {
+
+        @Override
+        public void map(LongWritable key, LongWritable value, Context context)
+                throws IOException, InterruptedException {
+            context.write(key, value);
+        }
+    }
+
+
+    /* The first reducer. */
+    public static class LoaderReduce extends Reducer<LongWritable, Node, 
+        LongWritable, Node> {
+
+        public void reduce(LongWritable key, Iterable<LongWritable> values, 
+            Context context) throws IOException, InterruptedException {
+            Node n = new Node();
+            n.setID(key.get());
+            n.setwhen(0L);
+            for (LongWritable value : values) {
+                n.addNeighbor(value);
+            }
+            double prob = 1.0 / denom;
+            Random r = new Random();
+            if (r.nextDouble() < prob) {
+                n.setStart();
+            }
+            context.write(key, n);
+        }
+    }
+
+
+    public static class BFSMap extends Mapper<LongWritable, Node,
+    LongWritable, LongWritable> {
+
+        private final static LongWritable ONE = new LongWritable(1L);
+        private LongWritable numb = new LongWritable();
+
+        public HashMap<Long, Long> bfs(ArrayList<Node> neighbor, long start) {
+            }
+
+        @Override
+        public void map(LongWritable key, Node value, Context context)
+                throws IOException, InterruptedException {
+            if (value.getStart()) {
+                value.setVisited();
+                for (long values : value.getNeighbors()) {
+                    Node temp = new Node();
+                    temp.setParent(value);
+                    temp.setID(values);
+                    temp.setDistance();
+                    temp.setStart();
+                    temp.setWhen(1L);
+                    context.write(values, temp);
+                }
+            }
+            context.write(key, value);
+        }
+    }
+
+    public static class BFSReduce extends Reducer<LongWritable, Node, 
+        LongWritable, Node> {
+
+        public void reduce(LongWritable key, Iterable<Node> values, 
+            Context context) throws IOException, InterruptedException {
+            long sum = 0;
+            for (Node nodes : values) {
+                
+            }
+        }
+    }
+
+
+
+
+
+
+
+    public static void main(String[] rawArgs) throws Exception {
+        GenericOptionsParser parser = new GenericOptionsParser(rawArgs);
+        Configuration conf = parser.getConfiguration();
+        String[] args = parser.getRemainingArgs();
+
+        // Pass in denom command line arg:
+        conf.set("denom", args[2]);
+
+        // Sample of passing value from main into Mappers/Reducers using
+        // conf. You might want to use something like this in the BFS phase:
+        // See LoaderMap for an example of how to access this value
+        conf.set("inputValue", (new Integer(5)).toString());
+
+        // Setting up mapreduce job to load in graph
+        Job job = new Job(conf, "load graph");
+
+        job.setJarByClass(SmallWorld.class);
+
+        job.setMapOutputKeyClass(LongWritable.class);
+        job.setMapOutputValueClass(LongWritable.class);
+        job.setOutputKeyClass(LongWritable.class);
+        job.setOutputValueClass(Node.class);
+
+        job.setMapperClass(LoaderMap.class);
+        job.setReducerClass(LoaderReduce.class);
+
+        job.setInputFormatClass(SequenceFileInputFormat.class);
+        job.setOutputFormatClass(SequenceFileOutputFormat.class);
+
+        // Input from command-line argument, output to predictable place
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path("bfs-0-out"));
+
+        // Actually starts job, and waits for it to finish
+        job.waitForCompletion(true);
+
+        // Repeats your BFS mapreduce
+        int i = 0;
+        while (i < MAX_ITERATIONS) {
+            job = new Job(conf, "bfs" + i);
+            job.setJarByClass(SmallWorld.class);
+
+            // Feel free to modify these four lines as necessary:
+            job.setMapOutputKeyClass(LongWritable.class);
+            job.setMapOutputValueClass(LongWritable.class);
+            job.setOutputKeyClass(LongWritable.class);
+            job.setOutputValueClass(LongWritable.class);
+
+            // You'll want to modify the following based on what you call
+            // your mapper and reducer classes for the BFS phase.
+            job.setMapperClass(BFSMap.class); // currently the default Mapper
+            job.setReducerClass(BFSReduce.class); // currently the default Reducer
+
+            job.setInputFormatClass(SequenceFileInputFormat.class);
+            job.setOutputFormatClass(SequenceFileOutputFormat.class);
+
+            // Notice how each mapreduce job gets gets its own output dir
+            FileInputFormat.addInputPath(job, new Path("bfs-" + i + "-out"));
+            FileOutputFormat.setOutputPath(job, new Path("bfs-"+ (i+1) +"-out"));
+
+            job.waitForCompletion(true);
+            i++;
+        }
+
+        // Mapreduce config for histogram computation
+        job = new Job(conf, "hist");
+        job.setJarByClass(SmallWorld.class);
+
+        // Feel free to modify these two lines as necessary:
+        job.setMapOutputKeyClass(LongWritable.class);
+        job.setMapOutputValueClass(LongWritable.class);
+
+        // DO NOT MODIFY THE FOLLOWING TWO LINES OF CODE:
+        job.setOutputKeyClass(LongWritable.class);
+        job.setOutputValueClass(LongWritable.class);
+
+        // You'll want to modify the following based on what you call your
+        // mapper and reducer classes for the Histogram Phase
+        job.setMapperClass(Mapper.class); // currently the default Mapper
+        job.setReducerClass(Reducer.class); // currently the default Reducer
+
+        job.setInputFormatClass(SequenceFileInputFormat.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
+
+        // By declaring i above outside of loop conditions, can use it
+        // here to get last bfs output to be input to histogram
+        FileInputFormat.addInputPath(job, new Path("bfs-"+ i +"-out"));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+        job.waitForCompletion(true);
+    }
+}
